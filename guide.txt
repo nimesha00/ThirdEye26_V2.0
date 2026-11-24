@@ -1,1 +1,64 @@
 Copy repo - ThirdEye26_V2.0
+
+----------------------------------------------------------------------
+Here's a quick guide to using **ThirdEye-phone.apk**.
+
+## 1. Install
+1. **Copy** `apk/ThirdEye-phone.apk` to your Android phone (Android 7 or newer), by USB, Google Drive or WhatsApp-to-yourself.
+2. **Tap** the file and allow installs from that app when asked.
+3. **If Play Protect warns** about an unknown app, tap **Install anyway**.
+
+## 2. First launch
+- The yellow splash screen shows, then Home, and the app says hello.
+- When a feature is first used, Android asks for permissions: **allow** microphone, camera, location, contacts, phone and SMS.
+
+## 3. Home screen
+
+| Control | What it does |
+|---|---|
+| **Big yellow "Tap to speak" button** (bottom) | Wait for "Speak now", then say a command |
+| **What is this?** | Takes a photo and describes it ("This looks like a cup…") |
+| **Money** | Opens the note reader |
+| **Read text** / **Read display** | Opens the text reader. Hold the page up, then press the big yellow **Take photo** button |
+| **Around me** | Live camera that announces objects and where they are ("person ahead, close") |
+| **Messages** | Reads your new SMS aloud |
+
+## 4. Voice commands (examples)
+- "**What is this?**", "**What note is this?**", "**Read this**", "**Read in Sinhala**"
+- "**What's around me?**"
+- "**Read my messages**", "**Send a message to Amma**", "**WhatsApp Kamal**"
+- "**Call Amma**", "**Take me to Kandy**"
+- "**What's the weather?**", "**Torch on**", "**Torch off**"
+- "**Speak Sinhala**", "**Speak Tamil**", "**Speak English**" (switches the app's language)
+- "**Help**" (lists the commands aloud)
+
+When sending a message, the app asks "Who…?" and "What should it say?", reads the message back, then waits for **yes** or **no**.
+
+## 5. On camera screens
+- **Back** closes the screen and returns to Home.
+- On the "What is this?" screen, **tap anywhere** to check again, or use the **✕** at the top right.
+- Hold the phone steady, about an arm's length away, in good light.
+
+## 6. What works in this APK right now
+The current APK (built 02:33) **doesn't include the downloadable model files yet**, so some features will tell you they're missing:
+
+| Feature | Status now |
+|---|---|
+| Voice assistant, Messages, Calls, Directions, Weather, Torch | ✅ Works |
+| What is this? | ✅ Works with labels only; better once the detector model is added |
+| Read text (English) | ✅ Works |
+| Read in Sinhala / Tamil | ⚠️ Says the language files are missing |
+| Around me (live detection) | ⚠️ Says the detector is missing |
+| Money (note reader) | ⚠️ Says the note model is missing, until you train it with your photos |
+
+To enable the ⚠️ items:
+1. Download `efficientdet_lite2.tflite` (detector) and the Tesseract language files into `app/src/main/assets/`.
+2. Rebuild with `.\gradlew assemblePhoneDebug`.
+3. Install the new APK from `app/build/outputs/apk/phone/debug/`.
+
+The download commands are in my earlier messages, and I can do the rebuild for you.
+
+## 7. If something goes wrong
+- **"App not installed"**: uninstall the old Third Eye first, then install again.
+- **No reaction to voice**: check the phone has internet, or install the Google app for speech recognition.
+- **No speech at all**: check the media volume, and that a voice is installed under Settings → Text-to-speech.
