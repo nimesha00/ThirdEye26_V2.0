@@ -24,6 +24,10 @@
     <string name="close">Close</string>
 
     <string name="note_reader_title">Note reader</string>
+    <string name="note_reader_intro">Note reader is on. Hold a rupee note in front of the camera. Press back to stop.</string>
+    <string name="note_reader_looking">Looking for a note…</string>
+    <string name="note_reader_model_missing">Sorry, the note reader model is missing from this version of the app, so I can\'t read notes yet.</string>
+    <string name="note_reader_model_missing_short">Note model missing</string>
     <string name="live_detection_title">Live detection</string>
     <string name="live_detection_hint">Press back to stop</string>
 
@@ -32,9 +36,35 @@
     <string name="ocr_capture_description">Take photo and read the text</string>
     <string name="ocr_result_title">Recognised text</string>
     <string name="ocr_check_again">Check again</string>
+    <!-- Offline Sinhala / Tamil reading (Tesseract). Spoken in English. -->
+    <string name="ocr_lang_sinhala">Sinhala</string>
+    <string name="ocr_lang_tamil">Tamil</string>
+    <string name="ocr_lang_sinhala_and_tamil">Sinhala and Tamil</string>
+    <string name="ocr_open_language">Opening the text reader for %1$s. Hold the page in front of the camera, then press the big yellow button at the bottom to take a photo.</string>
+    <string name="ocr_wait_local">Looking for Sinhala and Tamil text. This takes a few seconds.</string>
+    <string name="ocr_wait_sinhala">Reading in Sinhala. This takes a few seconds.</string>
+    <string name="ocr_wait_tamil">Reading in Tamil. This takes a few seconds.</string>
+    <string name="ocr_success">Here is the text.</string>
+    <string name="ocr_in_language">This text is in %1$s.</string>
+    <string name="ocr_no_voice">This text is in %1$s, but this phone has no %1$s voice, so I can\'t read it aloud. The text is shown on the screen. To add a voice, open Settings, then Text-to-speech, open the speech engine\'s settings, and install %1$s voice data.</string>
+    <string name="ocr_unsure">I\'m not sure about this reading, so some words may be wrong.</string>
+    <string name="ocr_fairly_sure">I\'m fairly sure of this reading.</string>
+    <string name="ocr_missing_files">The %1$s reading files are not on this phone, so I can\'t read %1$s yet. Please ask the person who set up the app to add them.</string>
+    <string name="ocr_nothing">Nothing is recognised. Tap the bottom of your screen to try again.</string>
+    <string name="ocr_failed">Text recognition failed. Tap the bottom of your screen to try again.</string>
+    <string name="ocr_check_again_hint">Tap the bottom of your screen to check again.</string>
+
+    <!-- Voice language and offline listening (step 5). -->
+    <string name="language_now_english">Okay, I\'ll listen for English now.</string>
+    <string name="language_now_sinhala">හරි, දැන් සිංහලෙන් කතා කරන්න. Okay, I\'ll listen for Sinhala now.</string>
+    <string name="language_now_tamil">சரி, இனி தமிழில் பேசுங்கள். Okay, I\'ll listen for Tamil now.</string>
+    <string name="language_set_listening">Okay, I\'ll listen for %1$s now.</string>
+    <string name="voice_missing">This phone has no %1$s voice, so I\'ll keep speaking English. To add one, open Settings, then Text-to-speech, then Install voice data.</string>
+    <string name="no_recogniser">Speech recognition isn\'t available on this phone right now. Connect to the internet, install the Google app, or add the offline listening model.</string>
+    <string name="offline_listening">No internet, so I\'m listening on the phone. Speak after the beep.</string>
+    <string name="offline_listening_english_only">Offline listening understands English only, not %1$s.</string>
+    <string name="torch_ask">Say torch on, or torch off.</string>
 
     <!-- Legacy strings kept for older code paths. -->
     <string name="take_photo">Take Photo</string>
-    <string name="start_capture">Start Capture</string>
-    <string name="stop_capture">Stop Capture</string>
 </resources>

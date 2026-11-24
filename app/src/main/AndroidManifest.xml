@@ -3,6 +3,15 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- permissions for INTERNET -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Offline listening: know when there's no internet, so Whisper is used instead. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Android 11+: lets SpeechRecognizer.isRecognitionAvailable() see the recogniser app. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
     <uses-permission android:name="android.permission.CAMERA" />
 
     <uses-feature android:name="android.hardware.camera.any" />
@@ -30,6 +39,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ThirdEye"
         tools:targetApi="31">
+        <!-- ARCore (depth for "Around me") is optional: phones without it use ObjDetection. -->
+        <meta-data
+            android:name="com.google.ar.core"
+            android:value="optional" />
+        <activity
+            android:name=".DepthDetectionActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".TextRecognitionCameraActivity2"
             android:exported="false">
@@ -38,28 +55,7 @@
                 android:value="" />
         </activity>
         <activity
-            android:name=".AbstractCameraXActivity"
-            android:exported="false">
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="" />
-        </activity>
-        <activity
-            android:name=".BaseModuleActivity"
-            android:exported="false">
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="" />
-        </activity>
-        <activity
             android:name=".TextRecognitionResultActivity"
-            android:exported="false">
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="" />
-        </activity>
-        <activity
-            android:name=".TextRecognitionCameraActivity"
             android:exported="false">
             <meta-data
                 android:name="android.app.lib_name"
@@ -90,21 +86,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".TrunByTurnNavMap"
-            android:exported="false">
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="" />
-        </activity>
-        <activity
             android:name=".CurrencyDetection"
-            android:exported="false">
-            <meta-data
-                android:name="android.app.lib_name"
-                android:value="" />
-        </activity>
-        <activity
-            android:name=".Weather"
             android:exported="false">
             <meta-data
                 android:name="android.app.lib_name"
