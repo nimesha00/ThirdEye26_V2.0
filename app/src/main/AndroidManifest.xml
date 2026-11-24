@@ -98,9 +98,6 @@
             <meta-data
                 android:name="android.app.lib_name"
                 android:value="" />
-            <meta-data
-                android:name="com.google.android.geo.API_KEY"
-                android:value="AIzaSyBcvBPt2R483vnIQXxh5etspyr4gm2KoQQ" />
         </activity>
 
 
