@@ -1,0 +1,18 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        // Tesseract4Android (offline Sinhala/Tamil/English OCR) is only published on JitPack.
+        maven { url 'https://jitpack.io' }
+    }
+}
+rootProject.name = "Third Eye"
+include ':app'

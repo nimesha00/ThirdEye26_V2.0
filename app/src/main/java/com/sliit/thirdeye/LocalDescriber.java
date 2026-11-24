@@ -21,9 +21,18 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
- * Offline "What is this?": describes a photo using two on-phone models.
+ * Offline "What is this?". When the optional SmolVLM2 model is downloaded and the phone has
+ * the memory for it, a vision-language model describes the photo in a sentence or two
+ * (see {@link SmolVlmDescriber}); on timeout or error, or without it, two on-phone models:
  *   ML Kit Image Labeling (400+ labels) says what the photo shows.
  *   MediaPipe object detection says which everyday objects are there, and where.
  * The answer says how sure it is, because a confident wrong answer is worse than "I'm not sure"
@@ -48,17 +57,36 @@ final class LocalDescriber implements AutoCloseable {
     private final ImageLabeler labeler;
     @Nullable private final OnDeviceDetector detector;
 
+    // SmolVLM runs on its own thread so a slow answer can be abandoned after the timeout.
+    @Nullable private final ExecutorService vlmExecutor;
+    @Nullable private volatile SmolVlmDescriber vlm;     // set and used on vlmExecutor only
+    private volatile boolean vlmBusy;
+
     LocalDescriber(Context context) {
         labeler = ImageLabeling.getClient(new ImageLabelerOptions.Builder()
                 .setConfidenceThreshold(MIN_LABEL_CONFIDENCE)
                 .build());
         // Null if the detector model is missing; labels alone still give a useful answer.
         detector = OnDeviceDetector.create(context, 0.5f, 5);
+
+        DescriberChoice.Engine engine = SmolVlmDescriber.pick(context);
+        Log.i(TAG, "Offline describer: " + engine);
+        if (engine == DescriberChoice.Engine.LABELS) {
+            vlmExecutor = null;
+        } else {
+            // Start loading now (a few seconds) so it's ready by the time the photo is taken.
+            Context app = context.getApplicationContext();
+            vlmExecutor = Executors.newSingleThreadExecutor();
+            vlmExecutor.execute(() -> vlm = SmolVlmDescriber.load(app, engine));
+        }
     }
 
     /** Builds the spoken description. Blocks while the models run, so never call it on the UI thread. */
     @WorkerThread
     String describe(Bitmap photo) {
+        String sentence = describeWithVlm(photo);
+        if (sentence != null) return sentence;
+
         List<ImageLabel> labels = new ArrayList<>();
         try {
             labels = Tasks.await(labeler.process(InputImage.fromBitmap(photo, 0)));
@@ -74,6 +102,48 @@ final class LocalDescriber implements AutoCloseable {
             }
         }
         return compose(labels, objects);
+    }
+
+    /** SmolVLM's answer, or null to fall back to the labels (none, busy, error, timeout). */
+    @Nullable
+    @WorkerThread
+    private String describeWithVlm(Bitmap photo) {
+        if (vlmExecutor == null || vlmBusy) return null;
+        vlmBusy = true;
+        Future<String> answer;
+        try {
+            answer = vlmExecutor.submit(() -> {
+                try {
+                    SmolVlmDescriber model = vlm;
+                    return model == null ? null
+                            : DescriberChoice.tidy(model.describe(photo, DescriberChoice.PROMPT));
+                } finally {
+                    vlmBusy = false;
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            vlmBusy = false;
+            return null;
+        }
+        try {
+            // Includes loading time on the first photo; a late model is used next time.
+            return answer.get(DescriberChoice.TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            Log.w(TAG, "SmolVLM took too long; using labels");
+            if (answer.cancel(false)) {
+                vlmBusy = false;            // still queued behind loading; never ran
+            } else {
+                SmolVlmDescriber model = vlm;
+                if (model != null) model.abort();
+            }
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (ExecutionException | RuntimeException e) {
+            Log.e(TAG, "SmolVLM failed; using labels", e);
+            return null;
+        }
     }
 
     static String compose(List<ImageLabel> labels, List<OnDeviceDetector.Found> objects) {
@@ -148,5 +218,16 @@ final class LocalDescriber implements AutoCloseable {
     public void close() {
         labeler.close();
         if (detector != null) detector.close();
+        if (vlmExecutor != null) {
+            SmolVlmDescriber model = vlm;
+            if (model != null) model.abort();
+            // Free it on its own thread, after any description still running there.
+            vlmExecutor.execute(() -> {
+                SmolVlmDescriber m = vlm;
+                vlm = null;
+                if (m != null) m.close();
+            });
+            vlmExecutor.shutdown();
+        }
     }
 }

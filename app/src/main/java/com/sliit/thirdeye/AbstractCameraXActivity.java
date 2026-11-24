@@ -89,6 +89,8 @@ public abstract class AbstractCameraXActivity<R> extends BaseModuleActivity {
             ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
                     .setTargetResolution(new Size(480, 640))
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    // RGBA frames copy straight into a Bitmap for the on-phone detector.
+                    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                     .build();
             imageAnalysis.setAnalyzer(analysisExecutor, image -> {
                 // Every frame must be closed, or CameraX stops delivering new ones.
@@ -118,9 +120,17 @@ public abstract class AbstractCameraXActivity<R> extends BaseModuleActivity {
     @UiThread
     protected abstract void applyToUiAnalyzeImageResult(R result);
 
+    /** Runs on the analysis thread after the last frame, when the screen closes: free models here. */
+    @WorkerThread
+    protected void onAnalysisStopped() {
+    }
+
     @Override
     protected void onDestroy() {
-        if (analysisExecutor != null) analysisExecutor.shutdown();
+        if (analysisExecutor != null) {
+            analysisExecutor.execute(this::onAnalysisStopped);
+            analysisExecutor.shutdown();
+        }
         super.onDestroy();
     }
 }

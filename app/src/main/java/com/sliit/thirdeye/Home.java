@@ -10,6 +10,10 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationManager;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -17,6 +21,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
@@ -36,16 +41,14 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.jsoup.Jsoup;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * The voice assistant. The user touches the bottom half of the screen and speaks; the
@@ -93,22 +96,12 @@ public class Home extends AppCompatActivity {
     private SmsHelper.Contact msgContact;
     private String msgBody;
 
-    public static String assetFilePath(Context context, String assetName) throws IOException {
-        File file = new File(context.getFilesDir(), assetName);
-        if (file.exists() && file.length() > 0) {
-            return file.getAbsolutePath();
-        }
-        try (InputStream is = context.getAssets().open(assetName);
-             OutputStream os = new FileOutputStream(file)) {
-            byte[] buffer = new byte[4 * 1024];
-            int read;
-            while ((read = is.read(buffer)) != -1) {
-                os.write(buffer, 0, read);
-            }
-            os.flush();
-        }
-        return file.getAbsolutePath();
-    }
+    // Language for listening and speaking (English, Sinhala, Tamil), remembered across launches.
+    private VoiceLanguage language = VoiceLanguage.ENGLISH;
+    // Offline listening with Whisper; the recogniser is created and used only on voiceExecutor.
+    private final ExecutorService voiceExecutor = Executors.newSingleThreadExecutor();
+    private WhisperRecognizer whisper;
+    private boolean offlineListeningExplained;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -117,6 +110,8 @@ public class Home extends AppCompatActivity {
 
         flashlightUtils = new FlashlightUtils(getApplicationContext());
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        language = VoiceLanguage.fromCode(getSharedPreferences(VoiceLanguage.PREFS, MODE_PRIVATE)
+                .getString(VoiceLanguage.PREF_KEY, null));
 
         initSpeech();
 
@@ -134,7 +129,7 @@ public class Home extends AppCompatActivity {
                 openVision(VisionClient.Mode.DISPLAY, null));
         findViewById(R.id.tileAround).setOnClickListener(v -> {
             speak("Opening live object detection.");
-            startActivity(new Intent(this, ObjDetection.class));
+            startActivity(AroundMe.intent(this));
         });
         findViewById(R.id.tileMessages).setOnClickListener(v -> readMessages());
 
@@ -157,10 +152,8 @@ public class Home extends AppCompatActivity {
     private void initSpeech() {
         tts = new TextToSpeech(getApplicationContext(), status -> {
             if (status != TextToSpeech.SUCCESS) return;
-            int lang = tts.setLanguage(new Locale("en", "LK"));
-            if (lang == TextToSpeech.LANG_MISSING_DATA || lang == TextToSpeech.LANG_NOT_SUPPORTED) {
-                tts.setLanguage(Locale.UK);
-            }
+            String missingVoice = applyVoice(language);
+            if (missingVoice != null) pendingSpeech = missingVoice + " " + (pendingSpeech == null ? "" : pendingSpeech);
             tts.setSpeechRate(0.95f);
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override
@@ -186,6 +179,33 @@ public class Home extends AppCompatActivity {
         });
     }
 
+    /**
+     * Sets the speech output voice for {@code lang}. When the phone has no voice for it,
+     * speaks English instead and returns a sentence explaining that; otherwise null.
+     */
+    @Nullable
+    private String applyVoice(VoiceLanguage lang) {
+        int r = tts.setLanguage(lang.ttsLocale);
+        if (r != TextToSpeech.LANG_MISSING_DATA && r != TextToSpeech.LANG_NOT_SUPPORTED) return null;
+        int en = tts.setLanguage(VoiceLanguage.ENGLISH.ttsLocale);
+        if (en == TextToSpeech.LANG_MISSING_DATA || en == TextToSpeech.LANG_NOT_SUPPORTED) {
+            tts.setLanguage(Locale.UK);
+        }
+        return lang == VoiceLanguage.ENGLISH ? null : getString(R.string.voice_missing, lang.englishName);
+    }
+
+    /** "Speak Sinhala" etc.: remembers the language and switches listening and speaking to it. */
+    private void switchLanguage(VoiceLanguage lang) {
+        language = lang;
+        getSharedPreferences(VoiceLanguage.PREFS, MODE_PRIVATE).edit()
+                .putString(VoiceLanguage.PREF_KEY, lang.code).apply();
+        String confirm = getString(lang == VoiceLanguage.SINHALA ? R.string.language_now_sinhala
+                : lang == VoiceLanguage.TAMIL ? R.string.language_now_tamil : R.string.language_now_english);
+        String missingVoice = ttsReady ? applyVoice(lang) : null;
+        speak(missingVoice == null ? confirm : getString(R.string.language_set_listening, lang.englishName)
+                + " " + missingVoice);
+    }
+
     private void runAfter(String utteranceId) {
         Runnable then = afterSpeech.remove(utteranceId);
         if (then != null) handler.post(then);
@@ -209,15 +229,91 @@ public class Home extends AppCompatActivity {
 
     // ----------------------------------------------------------------- speech in
 
+    /**
+     * Android's recogniser when it can work (best for Sinhala and Tamil); on-phone Whisper
+     * (English) when there is no recogniser or no internet. Both end in {@link #onHeard}.
+     */
     private void listen(int requestCode) {
+        OfflineSpeech.Recogniser which = OfflineSpeech.choose(
+                SpeechRecognizer.isRecognitionAvailable(this), isOnline(), WhisperRecognizer.isReady(this));
+        switch (which) {
+            case ANDROID:
+                listenWithAndroid(requestCode);
+                break;
+            case WHISPER:
+                listenWithWhisper(requestCode);
+                break;
+            default:
+                speak(getString(R.string.no_recogniser));
+        }
+    }
+
+    private void listenWithAndroid(int requestCode) {
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-LK");
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language.recognizerTag);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language.recognizerTag);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Start speaking");
+        if (!isOnline()) intent.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true);
         try {
             startActivityForResult(intent, requestCode);
         } catch (ActivityNotFoundException e) {
-            speak("Speech recognition isn't available on this phone. Please install the Google app.");
+            if (WhisperRecognizer.isReady(this)) {
+                listenWithWhisper(requestCode);
+            } else {
+                speak(getString(R.string.no_recogniser));
+            }
+        }
+    }
+
+    /** Records and transcribes on the phone, off the UI thread, then continues in onHeard. */
+    private void listenWithWhisper(int requestCode) {
+        withPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, "listen to you without the internet", () -> {
+            Runnable start = () -> voiceExecutor.execute(() -> {
+                if (whisper == null) whisper = WhisperRecognizer.create(getApplicationContext());
+                if (whisper == null) {
+                    handler.post(() -> speak(getString(R.string.no_recogniser)));
+                    return;
+                }
+                beep();
+                String said = whisper.listenOnce(getApplicationContext());
+                handler.post(() -> {
+                    if (!isDestroyed()) onHeard(requestCode, said);
+                });
+            });
+            if (offlineListeningExplained) {
+                start.run();
+            } else {
+                offlineListeningExplained = true;
+                String explain = getString(R.string.offline_listening);
+                if (language != VoiceLanguage.ENGLISH) {
+                    explain += " " + getString(R.string.offline_listening_english_only, language.englishName);
+                }
+                speakThen(explain, start);
+            }
+        });
+    }
+
+    /** Short tone so the user knows the microphone is now open. */
+    private static void beep() {
+        try {
+            ToneGenerator tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 80);
+            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 150);
+            Thread.sleep(200);
+            tone.release();
+        } catch (RuntimeException | InterruptedException ignored) {
+            // No tone is fine; listening still works.
+        }
+    }
+
+    private boolean isOnline() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) return false;
+        try {
+            NetworkCapabilities caps = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+        } catch (SecurityException e) {
+            return true;    // can't tell; let Android's recogniser try
         }
     }
 
@@ -228,7 +324,11 @@ public class Home extends AppCompatActivity {
 
         ArrayList<String> results = (resultCode == RESULT_OK && data != null)
                 ? data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS) : null;
-        String said = (results == null || results.isEmpty()) ? null : results.get(0);
+        onHeard(requestCode, (results == null || results.isEmpty()) ? null : results.get(0));
+    }
+
+    /** What the user said, from either recogniser; null or empty when nothing was heard. */
+    private void onHeard(int requestCode, @Nullable String said) {
         if (said == null || said.trim().isEmpty()) {
             clearMessageDraft();
             speak("I didn't catch that. Touch the bottom of the screen to try again.");
@@ -268,6 +368,23 @@ public class Home extends AppCompatActivity {
     private void route(String said) {
         String s = said.toLowerCase(Locale.ROOT).trim();
 
+        // Any language: "speak Tamil", "torch on", then the Sinhala/Tamil command tables.
+        VoiceLanguage switchTo = CommandKeywords.languageSwitch(s);
+        if (switchTo != null) {
+            switchLanguage(switchTo);
+            return;
+        }
+        CommandKeywords.Torch torch = CommandKeywords.torch(s);
+        if (torch != null) {
+            switchTorch(torch);
+            return;
+        }
+        CommandKeywords.Command command = CommandKeywords.match(s);
+        if (command != null) {
+            run(command);
+            return;
+        }
+
         if (s.contains("delete") && (s.contains("message") || s.contains("sms"))) {
             speak("Sorry, Android only lets your main messaging app delete messages, so I can't do that.");
         } else if (s.contains("whatsapp")) {
@@ -279,6 +396,9 @@ public class Home extends AppCompatActivity {
         } else if (s.contains("message") && (s.contains("read") || s.contains("check") || s.contains("new")
                 || s.contains("any") || s.contains("my messages"))) {
             readMessages();
+        } else if (s.contains("read") && OcrLanguage.preferenceFromSpeech(s) != null) {
+            // "read in Sinhala" / "read in Tamil": offline reader in that language (remembered).
+            openTextReaderIn(OcrLanguage.preferenceFromSpeech(s), said);
         } else if (containsAny(s, "note", "money", "cash", "rupee", "currency", "coin", "how much")) {
             openVision(VisionClient.Mode.MONEY, said);
         } else if (containsAny(s, "display", "screen", "meter", "atm", "board", "monitor")) {
@@ -287,21 +407,13 @@ public class Home extends AppCompatActivity {
             openVision(VisionClient.Mode.TEXT, said);
         } else if (containsAny(s, "obstacle", "walking", "around me", "object detection", "live detection")) {
             speak("Opening live object detection.");
-            startActivity(new Intent(this, ObjDetection.class));
+            startActivity(AroundMe.intent(this));
         } else if (containsAny(s, "what is this", "what's this", "what is that", "what's that", "in front",
                 "describe", "identify", "what do you see", "what can you see", "look at", "what am i holding",
                 "colour", "color")) {
             openVision(VisionClient.Mode.DESCRIBE, said);
         } else if (containsAny(s, "weather", "temperature", "rain")) {
             speakWeather();
-        } else if (containsAny(s, "torch", "flash", "light")) {
-            if (s.contains("off")) {
-                flashlightUtils.turnOffFlashlight();
-                speak("Torch off.");
-            } else {
-                flashlightUtils.turnOnFlashlight();
-                speak("Torch on.");
-            }
         } else if (s.startsWith("call ") || s.equals("call") || s.startsWith("phone ")) {
             String name = s.replaceFirst("^(call|phone)\\s*", "").trim();
             if (name.isEmpty()) {
@@ -317,12 +429,50 @@ public class Home extends AppCompatActivity {
                 openNavigation(place);
             }
         } else if (containsAny(s, "help", "what can you do")) {
-            speak("You can say: what is this, what note is this, read this, read the display, "
-                    + "what's around me, read my messages, send a message to someone, send a WhatsApp, "
-                    + "call someone, take me to a place, what's the weather, or turn the torch on.");
+            speakHelp();
         } else {
             askChatServer(said);
         }
+    }
+
+    /** A command recognised from the Sinhala or Tamil tables. */
+    private void run(CommandKeywords.Command command) {
+        switch (command) {
+            case WHAT_IS_THIS: openVision(VisionClient.Mode.DESCRIBE, null); break;
+            case MONEY: openVision(VisionClient.Mode.MONEY, null); break;
+            case READ_TEXT: openVision(VisionClient.Mode.TEXT, null); break;
+            case READ_DISPLAY: openVision(VisionClient.Mode.DISPLAY, null); break;
+            case AROUND_ME:
+                speak("Opening live object detection.");
+                // Same as the English command: the depth screen when the phone supports it.
+                startActivity(AroundMe.intent(this));
+                break;
+            case MESSAGES: readMessages(); break;
+            case SEND_MESSAGE: startMessage(Channel.SMS, ""); break;
+            case CALL: askWhoToCall(); break;
+            case DIRECTIONS: speakThen("Where do you want to go?", () -> listen(RC_PLACE)); break;
+            case WEATHER: speakWeather(); break;
+            case HELP: speakHelp(); break;
+        }
+    }
+
+    private void switchTorch(CommandKeywords.Torch torch) {
+        if (torch == CommandKeywords.Torch.OFF) {
+            flashlightUtils.turnOffFlashlight();
+            speak("Torch off.");
+        } else if (torch == CommandKeywords.Torch.ON) {
+            flashlightUtils.turnOnFlashlight();
+            speak("Torch on.");
+        } else {
+            speak(getString(R.string.torch_ask));
+        }
+    }
+
+    private void speakHelp() {
+        speak("You can say: what is this, what note is this, read this, read the display, "
+                + "what's around me, read my messages, send a message to someone, send a WhatsApp, "
+                + "call someone, take me to a place, what's the weather, or turn the torch on. "
+                + "To change language, say speak Sinhala, speak Tamil, or speak English.");
     }
 
     /**
@@ -350,8 +500,20 @@ public class Home extends AppCompatActivity {
                 break;
             default:
                 speak("Opening live object detection. Point the camera around you.");
-                startActivity(new Intent(this, ObjDetection.class));
+                startActivity(AroundMe.intent(this));
         }
+    }
+
+    /** Sinhala/Tamil go to the offline Tesseract reader; "read in English" switches back. */
+    private void openTextReaderIn(OcrLanguage.Preference language, String said) {
+        if (language == OcrLanguage.Preference.AUTO) {
+            TextRecognitionCameraActivity2.remember(this, language);
+            openVision(VisionClient.Mode.TEXT, said);
+            return;
+        }
+        speak(getString(R.string.ocr_open_language, getString(language == OcrLanguage.Preference.TAMIL
+                ? R.string.ocr_lang_tamil : R.string.ocr_lang_sinhala)));
+        TextRecognitionCameraActivity2.start(this, language);
     }
 
     private static boolean containsAny(String s, String... phrases) {
@@ -431,10 +593,8 @@ public class Home extends AppCompatActivity {
 
     private void onMessageConfirm(String answer) {
         if (msgContact == null || msgBody == null) return;
-        String a = answer.toLowerCase(Locale.ROOT);
-        boolean yes = containsAny(a, "yes", "yeah", "yep", "send", "ok", "sure", "correct");
-        boolean no = containsAny(a, "no", "don't", "cancel", "stop", "wait");
-        if (!yes || no) {
+        // Whole words, any language: "now" or "I know" is not a no.
+        if (!CommandKeywords.isYes(answer)) {
             clearMessageDraft();
             speak("Okay, I didn't send it.");
             return;
@@ -598,7 +758,7 @@ public class Home extends AppCompatActivity {
                 break;
             case "Opening Third eye object detection":
                 speak("Opening live object detection.");
-                startActivity(new Intent(this, ObjDetection.class));
+                startActivity(AroundMe.intent(this));
                 break;
             case "Opening weather":
                 speakWeather();
@@ -680,6 +840,12 @@ public class Home extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        // Free the Whisper model on its own thread, after any transcription in progress.
+        voiceExecutor.execute(() -> {
+            if (whisper != null) whisper.close();
+            whisper = null;
+        });
+        voiceExecutor.shutdown();
         if (tts != null) {
             tts.stop();
             tts.shutdown();

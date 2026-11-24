@@ -16,6 +16,8 @@ import com.google.mediapipe.tasks.vision.core.RunningMode;
 import com.google.mediapipe.tasks.vision.objectdetector.ObjectDetector;
 import com.google.mediapipe.tasks.vision.objectdetector.ObjectDetectorResult;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -91,17 +93,38 @@ final class OnDeviceDetector implements AutoCloseable {
      */
     @Nullable
     static OnDeviceDetector create(Context context, float minScore, int maxResults) {
+        return create(context, MODEL_ASSET, minScore, maxResults);
+    }
+
+    /**
+     * Same, for another detection model in assets (e.g. the rupee note model). Labels come from
+     * the model's metadata. Returns null when the model can't be loaded, e.g. it is missing.
+     */
+    @Nullable
+    static OnDeviceDetector create(Context context, String modelAsset, float minScore, int maxResults) {
+        if (!assetExists(context, modelAsset)) {
+            Log.w(TAG, modelAsset + " is not in app/src/main/assets");
+            return null;
+        }
         try {
             ObjectDetector.ObjectDetectorOptions options = ObjectDetector.ObjectDetectorOptions.builder()
-                    .setBaseOptions(BaseOptions.builder().setModelAssetPath(MODEL_ASSET).build())
+                    .setBaseOptions(BaseOptions.builder().setModelAssetPath(modelAsset).build())
                     .setRunningMode(RunningMode.IMAGE)
                     .setScoreThreshold(minScore)
                     .setMaxResults(maxResults)
                     .build();
             return new OnDeviceDetector(ObjectDetector.createFromOptions(context.getApplicationContext(), options));
         } catch (RuntimeException e) {
-            Log.e(TAG, "Could not load " + MODEL_ASSET + "; is it in app/src/main/assets?", e);
+            Log.e(TAG, "Could not load " + modelAsset + "; is it in app/src/main/assets?", e);
             return null;
+        }
+    }
+
+    private static boolean assetExists(Context context, String asset) {
+        try (InputStream in = context.getAssets().open(asset)) {
+            return true;
+        } catch (IOException e) {
+            return false;
         }
     }
 

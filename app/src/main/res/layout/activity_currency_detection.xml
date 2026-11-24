@@ -11,34 +11,14 @@
         android:id="@+id/object_detection_texture_view_stub"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout="@layout/texture_view"
-        app:layout_constraintBottom_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:layout="@layout/texture_view" />
 
-    <com.sliit.thirdeye.ResultView
-        android:id="@+id/resultView"
+    <!-- Yellow boxes around the notes found, for a sighted helper. -->
+    <com.sliit.thirdeye.NoteBoxesView
+        android:id="@+id/noteBoxes"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <TextView
-        android:id="@+id/Result_textView2"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginStart="10dp"
-        android:layout_marginTop="10dp"
-        android:layout_marginEnd="10dp"
-        android:background="#211E1E"
-        android:text=""
-        android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/resultView" />
+        android:importantForAccessibility="no" />
 
     <TextView
         style="@style/Widget.ThirdEye.ScreenLabel"
@@ -47,5 +27,23 @@
         android:text="@string/note_reader_title"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- What was found, in large text. Not a live region: results are already spoken. -->
+    <TextView
+        android:id="@+id/noteResult"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:background="@color/te_scrim"
+        android:gravity="center"
+        android:minHeight="72dp"
+        android:padding="16dp"
+        android:text="@string/note_reader_looking"
+        android:textColor="@color/te_accent"
+        android:textSize="30sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

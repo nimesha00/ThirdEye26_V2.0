@@ -2,6 +2,7 @@ package com.sliit.thirdeye;
 
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -38,6 +39,27 @@ import java.util.concurrent.Executors;
 public class TextRecognitionCameraActivity2 extends AppCompatActivity {
 
     private static final String TAG = "TextCamera";
+    static final String EXTRA_IMAGE_URI = "imageUri";
+    private static final String PREFS = "text_reader";
+    private static final String PREF_LANGUAGE = "language";
+
+    /** Opens the reader expecting {@code language}, and remembers it for next time. */
+    public static void start(Context context, OcrLanguage.Preference language) {
+        remember(context, language);
+        context.startActivity(new Intent(context, TextRecognitionCameraActivity2.class));
+    }
+
+    /** Saves the language for the next time the reader opens. */
+    public static void remember(Context context, OcrLanguage.Preference language) {
+        context.getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putString(PREF_LANGUAGE, language.name()).apply();
+    }
+
+    /** The language last chosen with "read in Sinhala" / "read in Tamil" (AUTO if never). */
+    public static OcrLanguage.Preference savedPreference(Context context) {
+        return OcrLanguage.Preference.fromStored(
+                context.getSharedPreferences(PREFS, MODE_PRIVATE).getString(PREF_LANGUAGE, null));
+    }
 
     private PreviewView previewView;
     private ImageCapture imageCapture;
@@ -161,6 +183,7 @@ public class TextRecognitionCameraActivity2 extends AppCompatActivity {
             Toast.makeText(this, "Img Saved", Toast.LENGTH_SHORT).show();
             Intent intent = new Intent(this, TextRecognitionResultActivity.class);
             intent.putExtra("piclink", piclink);
+            intent.putExtra(EXTRA_IMAGE_URI, imageUri.toString());
             startActivity(intent);
         });
     }
