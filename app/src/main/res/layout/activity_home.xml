@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Home: header, six shortcut tiles, and the large speak button.
+    The speak button stays the biggest target on screen; voice remains the main way in.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/te_background"
+    android:fitsSystemWindows="true"
+    android:keepScreenOn="true"
+    android:orientation="vertical"
+    android:paddingHorizontal="16dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="16dp"
+    tools:context=".Home">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="6dp">
+
+        <!-- Decorative: the title next to it is what TalkBack reads. -->
+        <ImageView
+            android:id="@+id/logo"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            app:srcCompat="@drawable/thirdeyelogo" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/appTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:accessibilityHeading="true"
+                android:text="@string/app_name_display"
+                android:textAppearance="@style/TextAppearance.ThirdEye.Title" />
+
+            <TextView
+                android:id="@+id/appSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/home_subtitle"
+                android:textAppearance="@style/TextAppearance.ThirdEye.Caption" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:layout_marginTop="20dp"
+        android:layout_marginBottom="4dp"
+        android:accessibilityHeading="true"
+        android:text="@string/home_quick_actions"
+        android:textAppearance="@style/TextAppearance.ThirdEye.Caption"
+        android:textStyle="bold" />
+
+    <!-- Shortcut tiles: 3 rows of 2 that share the space above the speak button. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1.25"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tileDescribe"
+                style="@style/Widget.ThirdEye.Tile"
+                android:text="@string/tile_describe"
+                app:icon="@drawable/ic_visibility" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tileMoney"
+                style="@style/Widget.ThirdEye.Tile"
+                android:text="@string/tile_money"
+                app:icon="@drawable/ic_money" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tileText"
+                style="@style/Widget.ThirdEye.Tile"
+                android:text="@string/tile_text"
+                app:icon="@drawable/ic_document" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tileDisplay"
+                style="@style/Widget.ThirdEye.Tile"
+                android:text="@string/tile_display"
+                app:icon="@drawable/ic_display" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tileAround"
+                style="@style/Widget.ThirdEye.Tile"
+                android:text="@string/tile_around"
+                app:icon="@drawable/ic_walk" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/tileMessages"
+                style="@style/Widget.ThirdEye.Tile"
+                android:text="@string/tile_messages"
+                app:icon="@drawable/ic_message" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Speak: full width, the largest target on the screen. -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button2"
+        style="@style/Widget.ThirdEye.PrimaryButton"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginHorizontal="6dp"
+        android:layout_marginTop="14dp"
+        android:layout_weight="1"
+        android:contentDescription="@string/home_button_description"
+        android:text="@string/home_button_text"
+        android:textSize="28sp"
+        app:cornerRadius="32dp"
+        app:icon="@drawable/ic_mic"
+        app:iconGravity="textTop"
+        app:iconPadding="12dp"
+        app:iconSize="72dp" />
+
+</LinearLayout>
