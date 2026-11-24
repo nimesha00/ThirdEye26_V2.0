@@ -14,6 +14,7 @@
 .cxx
 local.properties
 /apk/ThirdEye-debug.apk
+/apk/ThirdEye-phone.apk
 
 # Python bytecode from vision-backend tests
 __pycache__/
